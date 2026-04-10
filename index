@@ -1,0 +1,1029 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>McGowen Accounts — Territory Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" crossorigin="anonymous"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" crossorigin="anonymous"/>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js" crossorigin="anonymous"></script>
+<style>
+  :root {
+    --bg: #1e1e1e;
+    --surface: #272727;
+    --surface2: #2f2f2f;
+    --border: #3d3030;
+    --accent: #cc1c1c;
+    --accent2: #e84040;
+    --accent3: #ff6b47;
+    --text: #e8eaf0;
+    --text-dim: #6b7080;
+    --text-muted: #3d4250;
+    --radius: 10px;
+    --panel-w: 360px;
+    --header-h: 56px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'Oswald', sans-serif; }
+
+  /* HEADER */
+  #header {
+    position: fixed; top: 0; left: 0; right: 0; height: var(--header-h);
+    background: var(--bg); border-bottom: 1px solid var(--border);
+    border-top: 3px solid var(--accent);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px; z-index: 1000; gap: 10px;
+  }
+  #header .logo { font-size: 18px; font-weight: 700; letter-spacing: 0.12em; color: var(--accent); white-space: nowrap; text-transform: uppercase; }
+  #header .logo span { color: var(--text-dim); font-weight: 400; }
+  #search-wrap { flex: 1; max-width: 420px; position: relative; }
+  #search { width: 100%; background: var(--surface2); border: 1.5px solid var(--border); border-radius: 8px;
+    color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px; padding: 9px 12px 9px 34px;
+    outline: none; transition: border-color .2s; }
+  #search:focus { border-color: var(--accent); background: var(--surface); }
+  #search-wrap::before { content: '⌕'; position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+    color: var(--text-dim); font-size: 16px; pointer-events: none; z-index: 1; }
+  #search-dropdown {
+    display: none; position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+    background: var(--surface); border: 1.5px solid var(--accent); border-radius: 10px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5); z-index: 2000; max-height: 320px; overflow-y: auto;
+  }
+  #search-dropdown.visible { display: block; }
+  #search-dropdown::-webkit-scrollbar { width: 4px; }
+  #search-dropdown::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .sd-item {
+    padding: 10px 14px; cursor: pointer; border-bottom: 1px solid var(--border);
+    transition: background .12s; display: flex; align-items: center; gap: 10px;
+  }
+  .sd-item:last-child { border-bottom: none; }
+  .sd-item:hover, .sd-item.sd-focused { background: var(--surface2); }
+  .sd-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .sd-info { min-width: 0; }
+  .sd-name { font-size: 12px; font-weight: 600; font-family: 'Oswald', sans-serif; letter-spacing: 0.03em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sd-name mark { background: none; color: var(--accent); font-weight: 700; }
+  .sd-city { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim); margin-top: 1px; }
+  .sd-empty { padding: 14px; text-align: center; font-family: 'DM Mono', monospace;
+    font-size: 12px; color: var(--text-dim); }
+  #header-btns { display: flex; gap: 8px; align-items: center; }
+  .hbtn { background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text-dim); font-size: 12px; font-family: 'Oswald', sans-serif; font-weight: 600;
+    padding: 7px 12px; cursor: pointer; transition: all .2s; white-space: nowrap; letter-spacing: 0.04em; }
+  .hbtn:hover { border-color: var(--accent); color: var(--accent); }
+  .hbtn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  #menu-btn { display: none; background: none; border: none; color: var(--text); font-size: 22px; cursor: pointer; padding: 4px; }
+
+  /* LAYOUT */
+  #app { position: fixed; top: var(--header-h); left: 0; right: 0; bottom: 0; display: flex; }
+
+  /* SIDEBAR */
+  #sidebar {
+    width: var(--panel-w); height: 100%; background: var(--surface); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; z-index: 100; flex-shrink: 0; transition: transform .3s;
+  }
+  #sidebar-header { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); }
+  #filter-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .filter-chip {
+    font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500;
+    padding: 4px 10px; border-radius: 20px; cursor: pointer; border: 1px solid transparent;
+    transition: all .2s; letter-spacing: 0.03em;
+  }
+  .filter-chip[data-type="A"] { background: #252e25; color: #6dff6d; border-color: #2a4a2a; }
+  .filter-chip[data-type="A"].active { background: #6dff6d; color: #000; border-color: #6dff6d; }
+  .filter-chip[data-type="B"] { background: #252535; color: #e84040; border-color: #2a3555; }
+  .filter-chip[data-type="B"].active { background: var(--accent2); color: #000; border-color: #e84040; }
+  .filter-chip[data-type="C"] { background: #352535; color: #d47eff; border-color: #3a2a3a; }
+  .filter-chip[data-type="C"].active { background: #d47eff; color: #000; border-color: #d47eff; }
+  .filter-chip[data-type="E"] { background: #353020; color: #ffb347; border-color: #3a3010; }
+  .filter-chip[data-type="E"].active { background: #ffb347; color: #000; border-color: #ffb347; }
+  .filter-chip[data-type="F"] { background: #253035; color: #47e8ff; border-color: #2a3540; }
+  .filter-chip[data-type="F"].active { background: #47e8ff; color: #000; border-color: #47e8ff; }
+  .filter-chip[data-type="H"] { background: #352525; color: var(--accent3); border-color: #3a2a2a; }
+  .filter-chip[data-type="H"].active { background: var(--accent3); color: #000; border-color: var(--accent3); }
+  .filter-chip[data-type="S"] { background: #2e2e2e; color: #aaa; border-color: #333; }
+  .filter-chip[data-type="S"].active { background: #aaa; color: #000; border-color: #aaa; }
+  .filter-chip[data-type="X"] { background: #352a1a; color: var(--accent); border-color: #3a2f20; }
+  .filter-chip[data-type="X"].active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .filter-chip[data-type="none"] { background: #1e1e1e; color: #888; border-color: #333; }
+  .filter-chip[data-type="none"].active { background: #888; color: #000; border-color: #888; }
+  #label-filter-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .label-chip {
+    font-family: 'DM Mono', monospace; font-size: 10px; padding: 3px 9px; border-radius: 20px;
+    cursor: pointer; border: 1px solid var(--border); background: var(--surface2); color: var(--text-dim);
+    transition: all .2s;
+  }
+  .label-chip.active { border-color: var(--accent); color: var(--accent); }
+  #count-bar { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim);
+    padding: 6px 16px 0; letter-spacing: 0.03em; }
+
+  /* ACCOUNT LIST */
+  #account-list { flex: 1; overflow-y: auto; padding: 6px 0; }
+  #account-list::-webkit-scrollbar { width: 4px; }
+  #account-list::-webkit-scrollbar-track { background: transparent; }
+  #account-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .acct-item {
+    padding: 10px 16px; cursor: pointer; transition: background .15s;
+    border-bottom: 1px solid var(--border); position: relative;
+  }
+  .acct-item:hover { background: var(--surface2); }
+  .acct-item.selected { background: #2e1e1e; border-left: 3px solid var(--accent); padding-left: 13px; }
+  .acct-name { font-size: 12px; font-weight: 700; letter-spacing: 0.03em; margin-bottom: 2px; line-height: 1.3; }
+  .acct-city { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim); }
+  .acct-badges { display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; }
+  .type-badge {
+    font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500;
+    padding: 2px 7px; border-radius: 10px; letter-spacing: 0.02em;
+  }
+  .label-badge {
+    font-family: 'DM Mono', monospace; font-size: 9px; padding: 2px 7px; border-radius: 10px;
+    background: #2e2020; color: #e84040; border: 1px solid #2a1a1a;
+  }
+  .note-dot { position: absolute; top: 10px; right: 12px; width: 6px; height: 6px;
+    background: var(--accent); border-radius: 50%; }
+
+  /* MAP */
+  #map { flex: 1; height: 100%; position: relative; }
+  #map-el { width: 100%; height: 100%; }
+  #satellite-toggle {
+    position: absolute; bottom: 20px; right: 16px; z-index: 500;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); font-family: 'Oswald', sans-serif; font-size: 12px; font-weight: 600;
+    padding: 8px 14px; cursor: pointer; letter-spacing: 0.04em; transition: all .2s;
+  }
+  #satellite-toggle:hover, #satellite-toggle.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  /* DETAIL PANEL */
+  #detail-panel {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: var(--surface); border-top: 2px solid var(--accent);
+    max-height: 0; overflow: hidden; transition: max-height .35s cubic-bezier(.4,0,.2,1);
+    z-index: 400;
+  }
+  #detail-panel.open { max-height: 420px; }
+  #detail-inner { padding: 16px; overflow-y: auto; max-height: 420px; }
+  #detail-inner::-webkit-scrollbar { width: 3px; }
+  #detail-inner::-webkit-scrollbar-thumb { background: var(--border); }
+  #dp-close { float: right; background: none; border: none; color: var(--text-dim); font-size: 20px;
+    cursor: pointer; line-height: 1; margin-top: -2px; }
+  #dp-close:hover { color: var(--accent); }
+  #dp-name { font-size: 16px; font-weight: 800; letter-spacing: 0.04em; margin-bottom: 4px; padding-right: 30px; }
+  #dp-addr { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); margin-bottom: 10px; }
+  #dp-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  #dp-phone { font-family: 'DM Mono', monospace; font-size: 11px; color: #e84040; }
+  #dp-actions { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .dp-btn { background: var(--surface2); border: 1px solid var(--border); border-radius: 7px;
+    color: var(--text); font-family: 'Oswald', sans-serif; font-size: 11px; font-weight: 600;
+    padding: 7px 13px; cursor: pointer; transition: all .2s; letter-spacing: 0.03em; }
+  .dp-btn:hover { border-color: #e84040; color: #e84040; }
+  .dp-btn.sat-btn:hover { border-color: var(--accent); color: var(--accent); }
+  #dp-label-section { margin-bottom: 12px; }
+  #dp-label-section h4 { font-size: 10px; font-weight: 700; color: var(--text-dim); letter-spacing: 0.08em;
+    text-transform: uppercase; margin-bottom: 6px; }
+  #dp-label-input { display: flex; gap: 6px; margin-bottom: 6px; }
+  #new-label-input { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; padding: 6px 10px; outline: none; }
+  #new-label-input:focus { border-color: #e84040; }
+  #add-label-btn { background: var(--accent); border: none; border-radius: 6px; color: #fff;
+    font-family: 'Oswald', sans-serif; font-size: 12px; font-weight: 700; padding: 6px 12px; cursor: pointer; }
+  #dp-labels { display: flex; gap: 5px; flex-wrap: wrap; }
+  .dp-label-tag { font-family: 'DM Mono', monospace; font-size: 10px; padding: 3px 9px 3px 7px;
+    border-radius: 10px; background: #2e2020; color: #e84040; border: 1px solid #2a1a1a;
+    cursor: pointer; display: flex; align-items: center; gap: 4px; }
+  .dp-label-tag:hover { background: #352525; color: var(--accent3); border-color: #3a2a2a; }
+  #dp-note-section h4 { font-size: 10px; font-weight: 700; color: var(--text-dim); letter-spacing: 0.08em;
+    text-transform: uppercase; margin-bottom: 6px; }
+  #dp-note { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 7px;
+    color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; line-height: 1.5;
+    padding: 9px 11px; resize: vertical; min-height: 70px; outline: none; }
+  #dp-note:focus { border-color: var(--accent); }
+  #dp-save-note { margin-top: 7px; background: var(--accent); border: none; border-radius: 7px;
+    color: #fff; font-family: 'Oswald', sans-serif; font-size: 12px; font-weight: 600;
+    padding: 8px 16px; cursor: pointer; letter-spacing: 0.1em; text-transform: uppercase; }
+  #dp-save-note:hover { opacity: 0.9; }
+  .save-flash { animation: flash .4s ease; }
+  @keyframes flash { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+
+  /* SATELLITE MODAL */
+  #sat-modal {
+    display: none; position: fixed; inset: 0; z-index: 2000;
+    background: rgba(0,0,0,.85); align-items: center; justify-content: center;
+  }
+  #sat-modal.open { display: flex; }
+  #sat-modal-inner { background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    overflow: hidden; width: 90vw; max-width: 800px; position: relative; }
+  #sat-modal-header { padding: 12px 16px; background: var(--bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; }
+  #sat-modal-title { font-size: 13px; font-weight: 700; }
+  #sat-modal-close { background: none; border: none; color: var(--text-dim); font-size: 22px; cursor: pointer; }
+  #sat-modal-close:hover { color: var(--accent3); }
+  #sat-iframe { width: 100%; height: 60vh; border: none; display: block; }
+
+  /* MOBILE */
+  #sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 90; }
+
+  @media (max-width: 700px) {
+    :root { --panel-w: 100vw; }
+    #menu-btn { display: block; }
+    #sidebar {
+      position: fixed; top: var(--header-h); bottom: 0; left: 0;
+      transform: translateX(-100%); z-index: 200;
+    }
+    #sidebar.open { transform: translateX(0); }
+    #sidebar-overlay.open { display: block; }
+    #search-wrap { max-width: none; }
+    .logo span { display: none; }
+    #detail-panel.open { max-height: 55vh; }
+    #detail-inner { max-height: 55vh; }
+  }
+
+  /* Leaflet overrides */
+  .leaflet-container { background: #1e1e1e; }
+  .map-tooltip {
+    background: #1e1e1e !important; border: 1.5px solid var(--accent) !important;
+    color: var(--text) !important; font-family: 'Oswald', sans-serif !important;
+    font-size: 12px !important; font-weight: 600 !important; letter-spacing: 0.04em !important;
+    padding: 5px 10px !important; border-radius: 6px !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important; white-space: nowrap !important;
+    max-width: 240px !important; white-space: normal !important;
+  }
+  .map-tooltip::before { border-top-color: var(--accent) !important; }
+  .leaflet-popup-content-wrapper { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: 'Oswald', sans-serif; }
+  .leaflet-popup-tip { background: var(--surface); }
+  .leaflet-popup-content { margin: 10px 14px; font-size: 12px; }
+  .leaflet-popup-content b { color: var(--accent); }
+
+  /* Toast */
+  #toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--accent); color: #fff; font-family: 'Oswald', sans-serif; font-size: 12px; font-weight: 700;
+    padding: 8px 18px; border-radius: 20px; z-index: 3000; opacity: 0; transition: all .3s; pointer-events: none; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <button id="menu-btn" onclick="toggleSidebar()">☰</button>
+  <div class="logo">Will McGowen <span>Accounts</span></div>
+  <div id="search-wrap">
+    <input id="search" type="text" placeholder="Search accounts..." oninput="filterAccounts()" autocomplete="off" onfocus="showDropdown()" onblur="hideDropdown()">
+    <div id="search-dropdown"></div>
+  </div>
+  <div id="header-btns">
+    <button class="hbtn" id="clear-filters-btn" onclick="clearAllFilters()" style="display:none">✕ Clear</button>
+    <button class="hbtn" onclick="toggleSatelliteBase()" id="sat-base-btn">🛰 Satellite</button>
+  </div>
+</div>
+
+<div id="app">
+  <div id="sidebar-overlay" onclick="closeSidebar()"></div>
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <div id="filter-row">
+        <div class="filter-chip active" data-type="all" onclick="toggleTypeFilter('all',this)">ALL</div>
+        <div class="filter-chip active" data-type="A" onclick="toggleTypeFilter('A',this)">A — End Customer</div>
+        <div class="filter-chip active" data-type="B" onclick="toggleTypeFilter('B',this)">B — Engineering</div>
+        <div class="filter-chip active" data-type="C" onclick="toggleTypeFilter('C',this)">C — Plant Builder</div>
+        <div class="filter-chip active" data-type="E" onclick="toggleTypeFilter('E',this)">E — OEM/Skid</div>
+        <div class="filter-chip active" data-type="F" onclick="toggleTypeFilter('F',this)">F — Sys Integrator</div>
+        <div class="filter-chip active" data-type="H" onclick="toggleTypeFilter('H',this)">H — Reseller</div>
+        <div class="filter-chip active" data-type="S" onclick="toggleTypeFilter('S',this)">S — Service</div>
+        <div class="filter-chip active" data-type="X" onclick="toggleTypeFilter('X',this)">X — Affiliated</div>
+        <div class="filter-chip active" data-type="none" onclick="toggleTypeFilter('none',this)">— Untyped</div>
+      </div>
+      <div id="label-filter-row" style="display:none"></div>
+    </div>
+    <div id="count-bar"></div>
+    <div id="account-list"></div>
+  </div>
+  <div id="map">
+    <div id="map-el"></div>
+    <button id="satellite-toggle" onclick="toggleSatelliteBase()" id="sat-btn2">🛰 Satellite View</button>
+    <div id="detail-panel">
+      <div id="detail-inner">
+        <button id="dp-close" onclick="closeDetail()">×</button>
+        <div id="dp-name"></div>
+        <div id="dp-addr"></div>
+        <div id="dp-meta"></div>
+        <div id="dp-actions"></div>
+        <div id="dp-label-section">
+          <h4>Labels</h4>
+          <div id="dp-label-input">
+            <input id="new-label-input" type="text" placeholder="Add label..." onkeydown="if(event.key==='Enter')addLabel()">
+            <button id="add-label-btn" onclick="addLabel()">+</button>
+          </div>
+          <div id="dp-labels"></div>
+        </div>
+        <div id="dp-note-section">
+          <h4>Notes</h4>
+          <textarea id="dp-note" placeholder="Add notes about this account..."></textarea>
+          <button id="dp-save-note" onclick="saveNote()">Save Note</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="sat-modal">
+  <div id="sat-modal-inner">
+    <div id="sat-modal-header">
+      <div id="sat-modal-title">Satellite View</div>
+      <button id="sat-modal-close" onclick="closeSatModal()">×</button>
+    </div>
+    <iframe id="sat-iframe" src=""></iframe>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ============================================================
+// RAW DATA — 191 accounts from Will McGowen Salesforce export
+// ============================================================
+const RAW_ACCOUNTS = [
+  { id: 1, name: "AD PROCESS EQUIPMENT LLC", address: "540 FRONTENAC CT STE 180", city: "NAPERVILLE", state: "IL", zip: "60563", phone: "", type: "E", typeLabel: "OEM/Skid Builder" },
+  { id: 2, name: "ADAMS & CHRISTENSEN ENGINEERING INC", address: "1206 S BATAVIA AVE", city: "BATAVIA", state: "IL", zip: "60510", phone: "+6303370781", type: "none", typeLabel: "" },
+  { id: 3, name: "ADM MENDOTA KP3", address: "3004 E 12TH ST", city: "MENDOTA", state: "IL", zip: "61342", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 4, name: "ADVANCED TECHNOLOGY SERVICES INC", address: "539 E 214TH ST", city: "SHERIDAN", state: "IN", zip: "46069", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 5, name: "AECOM", address: "130 E RANDOLPH ST 24TH FL", city: "CHICAGO", state: "IL", zip: "60601", phone: "+15177559216", type: "A", typeLabel: "End Customer" },
+  { id: 6, name: "AECOM", address: "201 CEDAR ST", city: "STREATOR", state: "IL", zip: "61364", phone: "", type: "B", typeLabel: "Engineering/EPC" },
+  { id: 7, name: "AIRGAS INC", address: "1400 CARGO COURT", city: "MORRIS", state: "IL", zip: "60447", phone: "+8154672259", type: "A", typeLabel: "End Customer" },
+  { id: 8, name: "AIRGAS SPECIALTY PRODUCTS", address: "1200 W 138TH ST", city: "RIVERDALE", state: "IL", zip: "60827", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 9, name: "AIRGAS USA LLC", address: "1400 CARGO CT", city: "MINOOKA", state: "IL", zip: "60447", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 10, name: "ALSIP MINIMILL", address: "13101 S PULASKI RD", city: "ALSIP", state: "IL", zip: "60803", phone: "+7086250098", type: "none", typeLabel: "" },
+  { id: 11, name: "AMCOR RIGID PLASTICS USA LLC", address: "720 E 111TH ST", city: "CHICAGO", state: "IL", zip: "60628", phone: "+17734688001", type: "A", typeLabel: "End Customer" },
+  { id: 12, name: "AMEREN ILLINOIS COMPANY", address: "340 RACCUGLIA DR", city: "LA SALLE", state: "IL", zip: "61301", phone: "+18003636805", type: "A", typeLabel: "End Customer" },
+  { id: 13, name: "AMERICAN SUGAR REFINING INC", address: "2400 E 130TH ST", city: "CHICAGO", state: "IL", zip: "60633", phone: "+17736462203", type: "A", typeLabel: "End Customer" },
+  { id: 14, name: "AMERICAS STYRENICS LLC", address: "26332 S FRONTAGE RD", city: "CHANNAHON", state: "IL", zip: "60410", phone: "+18154235921", type: "A", typeLabel: "End Customer" },
+  { id: 15, name: "ARCHER DANIELS MIDLAND COMPANY", address: "581 N 43RD RD", city: "MENDOTA", state: "IL", zip: "61342", phone: "+18155393040", type: "A", typeLabel: "End Customer" },
+  { id: 16, name: "ASHLAND CHEMICAL INCORPORATED", address: "14303 PAXTON AVE", city: "CALUMET CITY", state: "IL", zip: "60409", phone: "+17088918230", type: "A", typeLabel: "End Customer" },
+  { id: 17, name: "AUTOMATIC SYSTEMS CO.", address: "", city: "", state: "IL", zip: "", phone: "", type: "none", typeLabel: "" },
+  { id: 18, name: "AUX SABLE LIQUID PRODUCTS LP", address: "6155 E US ROUTE 6", city: "MORRIS", state: "IL", zip: "60450", phone: "+18159415800", type: "A", typeLabel: "End Customer" },
+  { id: 19, name: "AVIATION GLOBAL INC.", address: "2863 W 95TH ST STE 143-353", city: "NAPERVILLE", state: "IL", zip: "60564", phone: "+17868881885", type: "H", typeLabel: "National Reseller" },
+  { id: 20, name: "BARRECA BLACKTOP SEALCOATING INC", address: "2122 GOULD CT", city: "ROCKDALE", state: "IL", zip: "60436", phone: "+18479705900", type: "A", typeLabel: "End Customer" },
+  { id: 21, name: "BARRY WEHMILLER DESIGN GROUP", address: "2211 YORK RD STE 320", city: "OAK BROOK", state: "IL", zip: "60523", phone: "+16302263250", type: "B", typeLabel: "Engineering/EPC" },
+  { id: 22, name: "BARRY WEHMILLER DESIGN GROUP", address: "1305 LAKEVIEW DR", city: "ROMEOVILLE", state: "IL", zip: "60446", phone: "+16307596800", type: "B", typeLabel: "Engineering/EPC" },
+  { id: 23, name: "BEHR PROCESS CORP", address: "270 STATE ST", city: "CHICAGO HEIGHTS", state: "IL", zip: "60411", phone: "+17145457101", type: "A", typeLabel: "End Customer" },
+  { id: 24, name: "BLACK & VEATCH CORP", address: "2 N RIVERSIDE PLZ STE 2050", city: "CHICAGO", state: "IL", zip: "60606", phone: "+13126837830", type: "B", typeLabel: "Engineering/EPC" },
+  { id: 25, name: "BORGWARNER TRANSMISSION SYSTEMS INC", address: "700 25TH AVE", city: "BELLWOOD", state: "IL", zip: "60104", phone: "+17085472600", type: "A", typeLabel: "End Customer" },
+  { id: 26, name: "BRINDLEY ENGINEERING CORPORATION", address: "901 WARRENVILLE RD STE 15", city: "LISLE", state: "IL", zip: "60532", phone: "+16367962020", type: "B", typeLabel: "Engineering/EPC" },
+  { id: 27, name: "BSI ENGINEERING", address: "745 MCCLINTOCK DR STE 320", city: "BURR RIDGE", state: "IL", zip: "60527", phone: "", type: "B", typeLabel: "Engineering/EPC" },
+  { id: 28, name: "BUNGE LODERS CROKLAAN USA LLC", address: "24708 W DURKEE RD", city: "CHANNAHON", state: "IL", zip: "60410", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 29, name: "BURNS & MCDONNELL ENGINEERING CO", address: "200 W ADAMS ST STE 1600", city: "CHICAGO", state: "IL", zip: "60606", phone: "+13124657747", type: "B", typeLabel: "Engineering/EPC" },
+  { id: 30, name: "CANAL TERMINAL COMPANY", address: "23213 S YOUNGS RD", city: "CHANNAHON", state: "IL", zip: "60410", phone: "+18155213575", type: "A", typeLabel: "End Customer" },
+  { id: 31, name: "CAROLLO ENGINEERS INC", address: "8770 W BRYN MAWR AVE STE 1300", city: "CHICAGO", state: "IL", zip: "60631", phone: "+17736321140", type: "B", typeLabel: "Engineering/EPC" },
+  { id: 32, name: "CARUS CORPORATION", address: "315 5TH ST", city: "PERU", state: "IL", zip: "61354", phone: "+18152231500", type: "A", typeLabel: "End Customer" },
+  { id: 33, name: "CB&I INC", address: "14105 S ROUTE 59", city: "PLAINFIELD", state: "IL", zip: "60544", phone: "+18154396000", type: "B", typeLabel: "Engineering/EPC" },
+  { id: 34, name: "CEDAR CONCEPTS CORPORATION", address: "4342 S WOLCOTT AVE", city: "CHICAGO", state: "IL", zip: "60609", phone: "+17738905790", type: "A", typeLabel: "End Customer" },
+  { id: 35, name: "CEDAR CONCEPTS CORPORATION", address: "4100 S PACKERS AVE", city: "CHICAGO", state: "IL", zip: "60609", phone: "+17738905790", type: "A", typeLabel: "End Customer" },
+  { id: 36, name: "CHAMPION PACKAGING & DISTRIBUTION", address: "637 FORESTWOOD DR", city: "ROMEOVILLE", state: "IL", zip: "60446", phone: "", type: "H", typeLabel: "National Reseller" },
+  { id: 37, name: "CLAYCO INC", address: "35 E WACKER DR STE 1300", city: "CHICAGO", state: "IL", zip: "60601", phone: "+13126580747", type: "C", typeLabel: "Plant Builder" },
+  { id: 38, name: "CONSTELLATION ENERGY GENERATION LLC", address: "35100 S STATE ROUTE 53", city: "BRACEVILLE", state: "IL", zip: "60407", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 39, name: "CONSTELLATION ENERGY GENERATION LLC", address: "6500 N DRESDEN RD", city: "MORRIS", state: "IL", zip: "60450", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 40, name: "CORCORAN FABRICATION", address: "6800 W 73RD ST", city: "CHICAGO", state: "IL", zip: "60638", phone: "+17084075506", type: "E", typeLabel: "OEM/Skid Builder" },
+  { id: 41, name: "CORCORAN FABRICATION & DESIGN INC", address: "5110 W 125TH PL", city: "ALSIP", state: "IL", zip: "60803", phone: "+17088970761", type: "E", typeLabel: "OEM/Skid Builder" },
+  { id: 42, name: "CORROSION FLUID PRODUCTS", address: "1280 LAKEVIEW DR", city: "ROMEOVILLE", state: "IL", zip: "60446", phone: "+16302261200", type: "A", typeLabel: "End Customer" },
+  { id: 43, name: "COVIA CORPORATION", address: "3450 E 2056TH RD", city: "WEDRON", state: "IL", zip: "60557", phone: "+118002439004", type: "A", typeLabel: "End Customer" },
+  { id: 44, name: "CPV THREE RIVERS LLC", address: "5707 E COLLINS RD", city: "MORRIS", state: "IL", zip: "60450", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 45, name: "CPV THREE RIVERS LLC", address: "7809 E COLLINS RD", city: "MORRIS", state: "IL", zip: "60450", phone: "+12407232300", type: "C", typeLabel: "Plant Builder" },
+  { id: 46, name: "CROWN CORK & SEAL USA INC", address: "11535 S CENTRAL AVE", city: "ALSIP", state: "IL", zip: "60803", phone: "+17082395337", type: "A", typeLabel: "End Customer" },
+  { id: 47, name: "CROWN CORK & SEAL USA INC", address: "1035 E NORTH ST", city: "BRADLEY", state: "IL", zip: "60915", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 48, name: "CROWN PACKAGING TECHNOLOGY INC.", address: "11535 S CENTRAL AVE", city: "ALSIP", state: "IL", zip: "60803", phone: "+17082395000", type: "A", typeLabel: "End Customer" },
+  { id: 49, name: "DDP SP EM US", address: "901 E KANKAKEE RIVER DR", city: "WILMINGTON", state: "IL", zip: "60481", phone: "+18154769688", type: "A", typeLabel: "End Customer" },
+  { id: 50, name: "DEDERT CORPORATION", address: "17740 HOFFMAN WAY", city: "HOMEWOOD", state: "IL", zip: "60430", phone: "+17087477000", type: "E", typeLabel: "OEM/Skid Builder" },
+  { id: 51, name: "DIAGEO AMERICAS SUPPLY INC", address: "14020 COIL PLUS DR", city: "PLAINFIELD", state: "IL", zip: "60544", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 52, name: "DIAGEO NORTH AMERICA INC", address: "24500 W 143RD ST", city: "PLAINFIELD", state: "IL", zip: "60544", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 53, name: "DIAGEO NORTH AMERICA INC", address: "24440 W 143RD ST", city: "PLAINFIELD", state: "IL", zip: "60544", phone: "+18152678294", type: "A", typeLabel: "End Customer" },
+  { id: 54, name: "DIVERSIFIED CPC INTERNATIONAL INC", address: "24338 W DURKEE RD", city: "CHANNAHON", state: "IL", zip: "60410", phone: "+18154242019", type: "A", typeLabel: "End Customer" },
+  { id: 55, name: "DOVER CHEMICAL CORPORATION", address: "3000 SHEFFIELD AVE", city: "HAMMOND", state: "IN", zip: "46327", phone: "+12199312630", type: "S", typeLabel: "Service Provider" },
+  { id: 56, name: "DUPONT", address: "25332 SW FRONTAGE RD", city: "CHANNAHON", state: "IL", zip: "60410", phone: "+18154232575", type: "A", typeLabel: "End Customer" },
+  { id: 57, name: "DUPONT", address: "1751 WIKENING COURT", city: "SCHAUMBURG", state: "IL", zip: "60173", phone: "", type: "none", typeLabel: "" },
+  { id: 58, name: "DUPONT DE NEMOURS INC", address: "901 E KANKAKEE RIVER DR STE 1", city: "WILMINGTON", state: "IL", zip: "60481", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 59, name: "ECOLAB INC", address: "3001 CHANNAHON RD", city: "JOLIET", state: "IL", zip: "60436", phone: "+18157294900", type: "A", typeLabel: "End Customer" },
+  { id: 60, name: "EESCO", address: "2401 INTERNATIONALE PKWY", city: "WOODRIDGE", state: "IL", zip: "60517", phone: "+18159335536", type: "F", typeLabel: "System Integrator" },
+  { id: 61, name: "ELKAY MANUFACTURING COMPANY", address: "1333 BUTTERFIELD RD STE 200", city: "DOWNERS GROVE", state: "IL", zip: "60515", phone: "+16305748484", type: "A", typeLabel: "End Customer" },
+  { id: 62, name: "ENGLEWOOD ELECTRIC SUPPLY CO", address: "1801 MOEN AVE", city: "ROCKDALE", state: "IL", zip: "60436", phone: "+18157253900", type: "H", typeLabel: "National Reseller" },
+  { id: 63, name: "ENTRUST SOLUTIONS GROUP LLC", address: "28100 TORCH PKWY", city: "WARRENVILLE", state: "IL", zip: "60555", phone: "+16303534000", type: "B", typeLabel: "Engineering/EPC" },
+  { id: 64, name: "EXXON MOBIL CORPORATION", address: "25915 S FRONTAGE RD", city: "CHANNAHON", state: "IL", zip: "60410", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 65, name: "EXXONMOBIL OIL CORPORATION", address: "I55 ARSENAL RD", city: "CHANNAHON", state: "IL", zip: "60410", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 66, name: "FUCHS LUBRICANTS CO", address: "17050 LATHROP AVE", city: "HARVEY", state: "IL", zip: "60426", phone: "+17083338900", type: "A", typeLabel: "End Customer" },
+  { id: 67, name: "GELITA USA CHICAGO", address: "10 WENTWORTH AVE", city: "CALUMET CITY", state: "IL", zip: "60409", phone: "+17088918400", type: "A", typeLabel: "End Customer" },
+  { id: 68, name: "GOTHAM GREENS FARMS LLC", address: "10636 S WOODLAWN AVE", city: "CHICAGO", state: "IL", zip: "60628", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 69, name: "GRANTEK SYSTEMS INTEGRATION CORP", address: "903 COMMERCE DR STE 200", city: "OAK BROOK", state: "IL", zip: "60523", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 70, name: "GRAYCOR INC", address: "2 MID AMERICA PLZ STE 400", city: "OAKBROOK TERRACE", state: "IL", zip: "60181", phone: "+16306847110", type: "X", typeLabel: "E+H Affiliated" },
+  { id: 71, name: "GREAT LAKES COCA COLA DISTRIBUTION", address: "12200 S LARAMIE AVE", city: "ALSIP", state: "IL", zip: "60803", phone: "+17085974700", type: "A", typeLabel: "End Customer" },
+  { id: 72, name: "GREEN THUMB INDUSTRIES", address: "110 EAST FOURTH STREET", city: "OGLESBY", state: "IL", zip: "61348", phone: "8157331436", type: "A", typeLabel: "End Customer" },
+  { id: 73, name: "GREEN THUMB INDUSTRIES INC", address: "110 E 4TH RD", city: "OGLESBY", state: "IL", zip: "61341", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 74, name: "GREIF", address: "W 130TH ST 4300", city: "ALSIP", state: "IL", zip: "60803", phone: "+7083714777", type: "none", typeLabel: "" },
+  { id: 75, name: "GSG MATERIAL TESTING INC", address: "623 COOPER CT", city: "SCHAUMBURG", state: "IL", zip: "60173", phone: "+13123468131", type: "A", typeLabel: "End Customer" },
+  { id: 76, name: "HARBOUR CONTRACTORS, INC.", address: "W MAIN ST 23830", city: "PLAINFIELD", state: "IL", zip: "60544", phone: "8152545500", type: "none", typeLabel: "" },
+  { id: 77, name: "HEARTLAND CONTROLS ENTERPRISE INC", address: "19027 S JODI RD STE F", city: "MOKENA", state: "IL", zip: "60448", phone: "+17084785210", type: "H", typeLabel: "National Reseller" },
+  { id: 78, name: "HERITAGE ENVIRONMENTAL SVCS LLC", address: "15330 CANAL BANK RD", city: "LEMONT", state: "IL", zip: "60439", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 79, name: "ILIAD TECHNOLOGIES LLC", address: "2575 PRAIRIEVIEW LANE", city: "AURORA", state: "IL", zip: "60502", phone: "+6309955516", type: "E", typeLabel: "OEM/Skid Builder" },
+  { id: 80, name: "ILLINOIS AMERICAN WATER COMPANY", address: "1000 INTERNATIONALE PKWY", city: "WOODRIDGE", state: "IL", zip: "60517", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 81, name: "INEOS ABS USA LLC", address: "4245 MERIDIAN PKWY STE 151", city: "AURORA", state: "IL", zip: "60504", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 82, name: "INEOS JOLIET LLC", address: "23425 AMOCO RD", city: "CHANNAHON", state: "IL", zip: "60410", phone: "+18154673295", type: "A", typeLabel: "End Customer" },
+  { id: 83, name: "INEOS STYROLUTION AMERICA LLC", address: "4245 MERIDIAN PKWY STE 151", city: "AURORA", state: "IL", zip: "60504", phone: "+18154231245", type: "A", typeLabel: "End Customer" },
+  { id: 84, name: "INNOPHOS INC", address: "1101 ARNOLD ST", city: "CHICAGO HEIGHTS", state: "IL", zip: "60411", phone: "+17087576111", type: "A", typeLabel: "End Customer" },
+  { id: 85, name: "INNOVATIVE PROCESS APPLICATIONS LLC", address: "14011 KOSTNER AVE", city: "CRESTWOOD", state: "IL", zip: "60418", phone: "+18152601098", type: "C", typeLabel: "Plant Builder" },
+  { id: 86, name: "INTERACTIVE BUILDING SOLUTIONS", address: "1919 CHERRY HILL RD", city: "JOLIET", state: "IL", zip: "60433", phone: "+18157241614", type: "E", typeLabel: "OEM/Skid Builder" },
+  { id: 87, name: "INTERACTIVE BUILDING SOLUTIONS", address: "1919 CHERRY HILL RD", city: "JOLIET", state: "IL", zip: "60433", phone: "+18157240525", type: "A", typeLabel: "End Customer" },
+  { id: 88, name: "INTERACTIVE BUILDING SOLUTIONS", address: "1921 CHERRY HILL RD", city: "JOLIET", state: "IL", zip: "60433", phone: "+18157240525", type: "A", typeLabel: "End Customer" },
+  { id: 89, name: "INVENERGY LLC", address: "1 S WACKER DR STE 1800", city: "CHICAGO", state: "IL", zip: "60606", phone: "+16305619455", type: "A", typeLabel: "End Customer" },
+  { id: 90, name: "ITW SPECIALTY FILMS", address: "", city: "", state: "IL", zip: "", phone: "", type: "none", typeLabel: "" },
+  { id: 91, name: "JACKSON GENERATION LLC", address: "24650 S BRANDON RD", city: "ELWOOD", state: "IL", zip: "60421", phone: "+18479082800", type: "A", typeLabel: "End Customer" },
+  { id: 92, name: "JLS TRADING INC", address: "402 RACHEL CIR", city: "ROMEOVILLE", state: "IL", zip: "60446", phone: "+18155050057", type: "H", typeLabel: "National Reseller" },
+  { id: 93, name: "JOLIET JUNIOR COLLEGE", address: "25532 NORTHCREST DR", city: "MINOOKA", state: "IL", zip: "60447", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 94, name: "JOLIET JUNIOR COLLEGE", address: "1215 HOUBOLT RD", city: "JOLIET", state: "IL", zip: "60431", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 95, name: "KAPPA PRODUCTS", address: "1301 E 99TH ST", city: "CHICAGO", state: "IL", zip: "60628", phone: "+7733740600", type: "none", typeLabel: "" },
+  { id: 96, name: "KELLOGG COMPANY", address: "750 E 110TH ST", city: "CHICAGO", state: "IL", zip: "60628", phone: "+17739957200", type: "A", typeLabel: "End Customer" },
+  { id: 97, name: "KEY SOLUTIONS FOR TIRE RECYCLING", address: "303 STATE ST", city: "CHICAGO HEIGHTS", state: "IL", zip: "60411", phone: "+17089802070", type: "A", typeLabel: "End Customer" },
+  { id: 98, name: "KRAFT HEINZ FOODS COMPANY", address: "200 E RANDOLPH", city: "CHICAGO", state: "IL", zip: "60601", phone: "+12105307200", type: "A", typeLabel: "End Customer" },
+  { id: 99, name: "LAKE WATER DISTRICT", address: "13131 GRANT RD", city: "LEMONT", state: "IL", zip: "60439", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 100, name: "LIQUID ENVIRONMENTAL SOLUTIONS", address: "12123 S STONY ISLAND AVE", city: "CHICAGO", state: "IL", zip: "60633", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 101, name: "LIVEWIRE CONSTRUCTION INC", address: "12900 S THROOP ST", city: "CALUMET PARK", state: "IL", zip: "60827", phone: "+17085356001", type: "A", typeLabel: "End Customer" },
+  { id: 102, name: "LYONDELLBASELL INDUSTRIES INC", address: "8805 TABLER RD", city: "MORRIS", state: "IL", zip: "60450", phone: "+18159427011", type: "A", typeLabel: "End Customer" },
+  { id: 103, name: "MANHATTAN MECHANICAL SERVICES", address: "25630 GOUGAR RD", city: "MANHATTAN", state: "IL", zip: "60442", phone: "", type: "none", typeLabel: "" },
+  { id: 104, name: "MCCAIN FOODS USA INC", address: "1 TOWER LN FL 11", city: "OAKBROOK TERRACE", state: "IL", zip: "60181", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 105, name: "McNDT Pipeline", address: "24154 S NORTHERN ILLINOIS DR", city: "CHANNAHON", state: "IL", zip: "60410", phone: "+8154675200", type: "none", typeLabel: "" },
+  { id: 106, name: "METAMORA INDUSTRIES LLC", address: "723 N WIEDMAN ST", city: "METAMORA", state: "IL", zip: "61548", phone: "+13093672368", type: "A", typeLabel: "End Customer" },
+  { id: 107, name: "METROPOLITAN INDUSTRIES INC", address: "37 FORESTWOOD DR", city: "ROMEOVILLE", state: "IL", zip: "60446", phone: "+18158869200", type: "E", typeLabel: "OEM/Skid Builder" },
+  { id: 108, name: "MIDDOUGH INC", address: "700 COMMERCE DR STE 200", city: "OAK BROOK", state: "IL", zip: "60523", phone: "+16307567000", type: "B", typeLabel: "Engineering/EPC" },
+  { id: 109, name: "MIDWEST MANUFACTURING", address: "2681 ELDAMAIN RD", city: "PLANO", state: "IL", zip: "60545", phone: "", type: "E", typeLabel: "OEM/Skid Builder" },
+  { id: 110, name: "MILHOUSE ENGINEERING & CONSTRUCTION", address: "333 S WABASH AVE", city: "CHICAGO", state: "IL", zip: "60604", phone: "+3129870061", type: "none", typeLabel: "" },
+  { id: 111, name: "MORRIS COGENERATION LLC", address: "8805 N TABLER RD", city: "MORRIS", state: "IL", zip: "60450", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 112, name: "MWRD OF GREATER CHICAGO", address: "400 E 130TH ST", city: "CHICAGO", state: "IL", zip: "60628", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 113, name: "NALCO COMPANY LLC", address: "1601 W DIEHL RD", city: "NAPERVILLE", state: "IL", zip: "60563", phone: "+16303051000", type: "E", typeLabel: "OEM/Skid Builder" },
+  { id: 114, name: "NALCO COMPANY LLC", address: "PO BOX 2927", city: "CHESTERTON", state: "IN", zip: "46304", phone: "+16517956111", type: "A", typeLabel: "End Customer" },
+  { id: 115, name: "NALCO CROSSBOW WATER LLC", address: "320 W 194TH ST", city: "GLENWOOD", state: "IL", zip: "60425", phone: "+17087542550", type: "H", typeLabel: "National Reseller" },
+  { id: 116, name: "NATIONAL SERVICE ALLIANCE LLC", address: "1919 CHERRY HILL RD", city: "JOLIET", state: "IL", zip: "60433", phone: "+17134628400", type: "H", typeLabel: "National Reseller" },
+  { id: 117, name: "NICOR GAS", address: "28512N 100 EAST ROAD", city: "STREATOR", state: "IL", zip: "61364", phone: "+13312153510", type: "A", typeLabel: "End Customer" },
+  { id: 118, name: "NIPPON PAINT AUTOMOTIVE AMERICAS", address: "2701 E 170TH ST", city: "LANSING", state: "IL", zip: "60438", phone: "+17088687403", type: "A", typeLabel: "End Customer" },
+  { id: 119, name: "NORCHEM INC", address: "11700 S MAYFIELD AVE", city: "ALSIP", state: "IL", zip: "60803", phone: "+17084784777", type: "E", typeLabel: "OEM/Skid Builder" },
+  { id: 120, name: "NORTHERN BORDER PIPELINE COMPANY", address: "23132 S YOUNGS RD", city: "CHANNAHON", state: "IL", zip: "60410", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 121, name: "NOURYON SURFACE CHEMISTRY LLC", address: "8005 TABLER RD", city: "MORRIS", state: "IL", zip: "60450", phone: "+18159426200", type: "A", typeLabel: "End Customer" },
+  { id: 122, name: "NUFARM AMERICAS INC", address: "11901 S AUSTIN AVE", city: "ALSIP", state: "IL", zip: "60803", phone: "+17083771330", type: "A", typeLabel: "End Customer" },
+  { id: 123, name: "NUFARM AMERICAS INC", address: "220 E 17TH ST", city: "CHICAGO HEIGHTS", state: "IL", zip: "60411", phone: "+17087562010", type: "A", typeLabel: "End Customer" },
+  { id: 124, name: "OCCIDENTAL CHEMICAL CORP", address: "4201 W 69TH ST", city: "CHICAGO", state: "IL", zip: "60629", phone: "+13122840079", type: "A", typeLabel: "End Customer" },
+  { id: 125, name: "OLAM COCOA AMERICAS", address: "990 VETERANS PKWY", city: "BOLINGBROOK", state: "IL", zip: "60440", phone: "+18157152233", type: "A", typeLabel: "End Customer" },
+  { id: 126, name: "OMEGA PARTNERS JOLIET LLC", address: "27100 S FRONTAGE RD", city: "CHANNAHON", state: "IL", zip: "60410", phone: "+18154232700", type: "A", typeLabel: "End Customer" },
+  { id: 127, name: "ONEOK INC.", address: "12850 S SMITH RD", city: "LEMONT", state: "IL", zip: "60439", phone: "+16302575404", type: "A", typeLabel: "End Customer" },
+  { id: 128, name: "ONEOK NORTH SYSTEMS LLC", address: "4755 E RTE US 6", city: "MORRIS", state: "IL", zip: "60450", phone: "+18159422230", type: "A", typeLabel: "End Customer" },
+  { id: 129, name: "Ottawa Painting", address: "", city: "", state: "IL", zip: "", phone: "", type: "none", typeLabel: "" },
+  { id: 130, name: "OVIVO USA, LLC", address: "9651 196TH ST", city: "MOKENA", state: "IL", zip: "60448", phone: "", type: "B", typeLabel: "Engineering/EPC" },
+  { id: 131, name: "OZINGA ENERGY", address: "19001 OLD LAGRANGE RD", city: "MOKENA", state: "IL", zip: "60448", phone: "+17083263600", type: "A", typeLabel: "End Customer" },
+  { id: 132, name: "OZINGA ENERGY LLC", address: "9035 W 192ND ST", city: "MOKENA", state: "IL", zip: "60448", phone: "+1604488101", type: "E", typeLabel: "OEM/Skid Builder" },
+  { id: 133, name: "PACTIV LLC", address: "PO BOX 5040", city: "LAKE FOREST", state: "IL", zip: "60045", phone: "+18038275292", type: "A", typeLabel: "End Customer" },
+  { id: 134, name: "PACTIV LLC", address: "1900 W FIELD CT", city: "LAKE FOREST", state: "IL", zip: "60045", phone: "+18474822024", type: "A", typeLabel: "End Customer" },
+  { id: 135, name: "PACTIV LLC", address: "460 GIBRALTAR DR", city: "BOLINGBROOK", state: "IL", zip: "60440", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 136, name: "PACTIV LLC", address: "7701 W 79TH ST", city: "BRIDGEVIEW", state: "IL", zip: "60455", phone: "", type: "E", typeLabel: "OEM/Skid Builder" },
+  { id: 137, name: "PATRICK ENGINEERING", address: "4970 VARSITY DR", city: "LISLE", state: "IL", zip: "60532", phone: "+8007997050", type: "none", typeLabel: "" },
+  { id: 138, name: "PETRAK INDUSTRIES INCORPORATED", address: "17250 NEW LENOX RD STE 3", city: "JOLIET", state: "IL", zip: "60433", phone: "+18154832290", type: "E", typeLabel: "OEM/Skid Builder" },
+  { id: 139, name: "PHIBRO ANIMAL HEALTH CORPORATION", address: "400 STATE ST", city: "CHICAGO HEIGHTS", state: "IL", zip: "60411", phone: "+17084001188", type: "A", typeLabel: "End Customer" },
+  { id: 140, name: "POLLYANA BREWING COMPANY", address: "431 TALCOTT AVENUE", city: "LEMONT", state: "IL", zip: "60439", phone: "+16309145834", type: "A", typeLabel: "End Customer" },
+  { id: 141, name: "PQ LLC", address: "111 INGALLS AVE", city: "JOLIET", state: "IL", zip: "60435", phone: "+16106514200", type: "A", typeLabel: "End Customer" },
+  { id: 142, name: "PQ LLC", address: "340 E GROVE ST", city: "UTICA", state: "IL", zip: "61373", phone: "+18156674241", type: "A", typeLabel: "End Customer" },
+  { id: 143, name: "PRESTONE PRODUCTS CORPORATION", address: "13160 S PULASKI RD", city: "ALSIP", state: "IL", zip: "60803", phone: "+17083713000", type: "A", typeLabel: "End Customer" },
+  { id: 144, name: "PROCESS AND CONTROL SYSTEMS INC", address: "5836 W 117TH PL", city: "ALSIP", state: "IL", zip: "60803", phone: "+17082930557", type: "F", typeLabel: "System Integrator" },
+  { id: 145, name: "PRODEVAL CORP", address: "1437 PAYNE RD", city: "SCHAUMBURG", state: "IL", zip: "60173", phone: "", type: "B", typeLabel: "Engineering/EPC" },
+  { id: 146, name: "PROJECT HELIX", address: "14020 COIL PLUS DR", city: "PLAINFIELD", state: "IL", zip: "60544", phone: "", type: "C", typeLabel: "Plant Builder" },
+  { id: 147, name: "PsiQuantum", address: "", city: "", state: "IL", zip: "", phone: "", type: "none", typeLabel: "" },
+  { id: 148, name: "PVS CHEMICALS", address: "12260 S CARONDOLET AVE", city: "CHICAGO", state: "IL", zip: "60633", phone: "+17739338800", type: "A", typeLabel: "End Customer" },
+  { id: 149, name: "RDB ENVIRONMENTAL INC", address: "9035 W 192ND ST STE B", city: "MOKENA", state: "IL", zip: "60448", phone: "+19713528430", type: "B", typeLabel: "Engineering/EPC" },
+  { id: 150, name: "REICHHOLD LLC2", address: "6350 E COLLINS RD", city: "MORRIS", state: "IL", zip: "60450", phone: "+19199907500", type: "A", typeLabel: "End Customer" },
+  { id: 151, name: "REVERE ELECTRIC SUPPLY", address: "1220 WENZEL RD", city: "PERU", state: "IL", zip: "61354", phone: "+18152241510", type: "F", typeLabel: "System Integrator" },
+  { id: 152, name: "REVERE ELECTRIC SUPPLY CO", address: "8807 187TH ST", city: "MOKENA", state: "IL", zip: "60448", phone: "+17089953251", type: "H", typeLabel: "National Reseller" },
+  { id: 153, name: "RICH PRODUCTS CORPORATION", address: "21511 DIVISION ST", city: "CREST HILL", state: "IL", zip: "60403", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 154, name: "RICH PRODUCTS CORPORATION", address: "6200 W MULFORD ST", city: "NILES", state: "IL", zip: "60714", phone: "+18475811749", type: "A", typeLabel: "End Customer" },
+  { id: 155, name: "ROCHELLE FOODS", address: "1001 S MAIN ST", city: "ROCHELLE", state: "IL", zip: "61068", phone: "+18155624141", type: "A", typeLabel: "End Customer" },
+  { id: 156, name: "ROMAN PRODUCTS LLC", address: "824 STATE ST", city: "CALUMET CITY", state: "IL", zip: "60409", phone: "+17088910770", type: "A", typeLabel: "End Customer" },
+  { id: 157, name: "RoviSys", address: "1801 S MEYERS RD", city: "OAKBROOK TERRACE", state: "IL", zip: "60181", phone: "", type: "F", typeLabel: "System Integrator" },
+  { id: 158, name: "ROWELL CHEMICAL CORPORATION", address: "10100 S ARCHER AVE", city: "WILLOW SPRINGS", state: "IL", zip: "60480", phone: "+17088391707", type: "A", typeLabel: "End Customer" },
+  { id: 159, name: "SABIC INNOVATIVE PLASTICS US LLC", address: "2148 N 2753RD RD", city: "OTTAWA", state: "IL", zip: "61350", phone: "", type: "H", typeLabel: "National Reseller" },
+  { id: 160, name: "SALCO PRODUCTS INC", address: "1385 101ST ST STE A", city: "LEMONT", state: "IL", zip: "60439", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 161, name: "SAVAGE SERVICES", address: "12200 S CARONDOLET AVE", city: "CHICAGO", state: "IL", zip: "60633", phone: "+17087386027", type: "A", typeLabel: "End Customer" },
+  { id: 162, name: "SHARLEN ELECTRIC CO", address: "9101 S BALTIMORE AVE", city: "CHICAGO", state: "IL", zip: "60617", phone: "+17737210700", type: "A", typeLabel: "End Customer" },
+  { id: 163, name: "SIKA CORPORATION", address: "1515 TITANIUM DR", city: "OTTAWA", state: "IL", zip: "61350", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 164, name: "SOLINA USA INC", address: "771 W CROSSROADS PKWY", city: "BOLINGBROOK", state: "IL", zip: "60490", phone: "+16308333810", type: "A", typeLabel: "End Customer" },
+  { id: 165, name: "STANTEC CONSULTING SERVICES INC", address: "224 S MICHIGAN AVE STE 1400", city: "CHICAGO", state: "IL", zip: "60657", phone: "+13125541400", type: "B", typeLabel: "Engineering/EPC" },
+  { id: 166, name: "STEPAN COMPANY", address: "22500 W STEPAN DR", city: "ELWOOD", state: "IL", zip: "60421", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 167, name: "STEPAN COMPANY", address: "2900 MILLSDALE RD", city: "JOLIET", state: "IL", zip: "60436", phone: "+18157745200", type: "A", typeLabel: "End Customer" },
+  { id: 168, name: "STERLING ENGINEERING", address: "WESTBROOK CORPORATE CENTER 2", city: "WESTCHESTER", state: "IL", zip: "60154", phone: "+6309933400", type: "none", typeLabel: "" },
+  { id: 169, name: "SYSERCO", address: "5019 CHASE AVE", city: "DOWNERS GROVE", state: "IL", zip: "60515", phone: "+13319033300", type: "E", typeLabel: "OEM/Skid Builder" },
+  { id: 170, name: "TITAN US LLC", address: "700 N GREEN ST SUITE 204", city: "CHICAGO", state: "IL", zip: "60642", phone: "+13312125953", type: "A", typeLabel: "End Customer" },
+  { id: 171, name: "TM PROCESS & CONTROLS INC", address: "14020 COIL PLUS DR", city: "PLAINFIELD", state: "IL", zip: "60544", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 172, name: "TM PROCESS AND CONTROLS INC", address: "1733 PARK ST STE 104", city: "NAPERVILLE", state: "IL", zip: "60563", phone: "+13129728799", type: "A", typeLabel: "End Customer" },
+  { id: 173, name: "TOYAL AMERICA INC", address: "17401 BROADWAY ST", city: "LOCKPORT", state: "IL", zip: "60441", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 174, name: "UNITED SUGAR PRODUCERS & REFINERS", address: "3215 N WILTON AVE STE 1A", city: "CHICAGO", state: "IL", zip: "60657", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 175, name: "UNIVAR SOLUTIONS USA INC", address: "3075 HIGHLAND PKWY STE 200", city: "DOWNERS GROVE", state: "IL", zip: "60515", phone: "+13317776000", type: "A", typeLabel: "End Customer" },
+  { id: 176, name: "UNIVAR SOLUTIONS USA INC", address: "8500 W 68TH ST STE 2", city: "BEDFORD PARK", state: "IL", zip: "60501", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 177, name: "UNIVAR SOLUTIONS USA INC", address: "13915 W ROUTE 30", city: "PLAINFIELD", state: "IL", zip: "60544", phone: "+18152306600", type: "A", typeLabel: "End Customer" },
+  { id: 178, name: "UNIVAR SOLUTIONS USA INC", address: "8500 WILLOW SPRINGS RD", city: "WILLOW SPRINGS", state: "IL", zip: "60480", phone: "+17085882900", type: "A", typeLabel: "End Customer" },
+  { id: 179, name: "VALDES ARCHITECTURE AND", address: "100 W 22ND ST STE 185", city: "LOMBARD", state: "IL", zip: "60148", phone: "", type: "B", typeLabel: "Engineering/EPC" },
+  { id: 180, name: "VALLEN INTEGRATED SUPPLY INC", address: "400 STATE ST", city: "CHICAGO HEIGHTS", state: "IL", zip: "60411", phone: "+18565421510", type: "H", typeLabel: "National Reseller" },
+  { id: 181, name: "VECTOR PIPELINE LP", address: "21411 W SCHWEITZER RD", city: "ELWOOD", state: "IL", zip: "60421", phone: "", type: "A", typeLabel: "End Customer" },
+  { id: 182, name: "VEOLIA ES TECHNICAL SOLUTIONS LLC", address: "5137 INDIANAPOLIS BLVD", city: "EAST CHICAGO", state: "IN", zip: "46312", phone: "+12193926700", type: "A", typeLabel: "End Customer" },
+  { id: 183, name: "VEOLIA WATER SOLUTIONS", address: "23563 W MAIN ST", city: "PLAINFIELD", state: "IL", zip: "60544", phone: "+18156092000", type: "E", typeLabel: "OEM/Skid Builder" },
+  { id: 184, name: "VEOLIA WATER SOLUTIONS", address: "700 E BUTTERFIELD RD STE 300", city: "LOMBARD", state: "IL", zip: "60148", phone: "+16302181500", type: "F", typeLabel: "System Integrator" },
+  { id: 185, name: "VEOLIA WATER TECHNOLOGIES &", address: "333 S LOMBARD RD", city: "ADDISON", state: "IL", zip: "60101", phone: "+16305438480", type: "A", typeLabel: "End Customer" },
+  { id: 186, name: "W F JOHNSTON CONSTRUCTION INC", address: "109 INDUSTRIAL DR", city: "MINOOKA", state: "IL", zip: "60447", phone: "+18154674600", type: "F", typeLabel: "System Integrator" },
+  { id: 187, name: "W R GRACE & CO", address: "4099 W 71ST ST", city: "CHICAGO", state: "IL", zip: "60629", phone: "+17738383200", type: "A", typeLabel: "End Customer" },
+  { id: 188, name: "WESCO DISTRIBUTION INC", address: "3939 S KARLOV AVE STE 1", city: "CHICAGO", state: "IL", zip: "60632", phone: "", type: "H", typeLabel: "National Reseller" },
+  { id: 189, name: "WORLDS FINEST CHOCOLATE INC", address: "4801 S LAWNDALE AVE", city: "CHICAGO", state: "IL", zip: "60632", phone: "+18888218452", type: "A", typeLabel: "End Customer" },
+  { id: 190, name: "ZACHRY ENGINEERING CORPORATION", address: "1411 OPUS PL STE 200", city: "DOWNERS GROVE", state: "IL", zip: "60515", phone: "+16309635800", type: "B", typeLabel: "Engineering/EPC" },
+  { id: 191, name: "ZOETIS LLC", address: "400 STATE ST", city: "CHICAGO HEIGHTS", state: "IL", zip: "60411", phone: "+17087580111", type: "A", typeLabel: "End Customer" },
+];
+
+// Pre-computed geocoords for IL/IN addresses (lat/lng from known zip centroids + address offsets)
+const GEOCOORDS = {
+  1: [41.7508, -88.1535], 2: [41.8468, -88.3126], 3: [41.5303, -89.0734], 4: [40.1467, -86.2100],
+  5: [41.8855, -87.6268], 6: [41.1217, -88.8351], 7: [41.3636, -88.4200], 8: [41.6370, -87.6266],
+  9: [41.4496, -88.2577], 10: [41.6745, -87.7318], 11: [41.7230, -87.5876], 12: [41.3260, -89.1000],
+  13: [41.6622, -87.5384], 14: [41.4350, -88.2312], 15: [41.5303, -89.0800], 16: [41.6040, -87.5395],
+  17: [41.8, -88.0], 18: [41.3640, -88.4160], 19: [41.7714, -88.1461], 20: [41.5200, -88.0640],
+  21: [41.8560, -87.9640], 22: [41.6430, -88.1000], 23: [41.5240, -87.6350], 24: [41.8825, -87.6370],
+  25: [41.8730, -87.8800], 26: [41.8010, -88.0840], 27: [41.7490, -87.9200], 28: [41.4330, -88.2180],
+  29: [41.8830, -87.6340], 30: [41.4320, -88.2340], 31: [41.9830, -87.8400], 32: [41.3350, -89.1350],
+  33: [41.6260, -88.2240], 34: [41.8040, -87.6660], 35: [41.8020, -87.6580], 36: [41.6430, -88.0990],
+  37: [41.8850, -87.6248], 38: [41.2290, -88.2340], 39: [41.3780, -88.4490], 40: [41.7660, -87.7390],
+  41: [41.6640, -87.7160], 42: [41.6390, -88.0990], 43: [41.4080, -88.7650], 44: [41.3900, -88.4280],
+  45: [41.3920, -88.4200], 46: [41.6720, -87.7250], 47: [41.1430, -87.8660], 48: [41.6720, -87.7250],
+  49: [41.3060, -88.1540], 50: [41.5500, -87.6600], 51: [41.6300, -88.2100], 52: [41.6270, -88.2150],
+  53: [41.6270, -88.2150], 54: [41.4340, -88.2290], 55: [41.6200, -87.4800], 56: [41.4310, -88.2100],
+  57: [42.0334, -88.0834], 58: [41.3060, -88.1530], 59: [41.5260, -88.0520], 60: [41.7400, -88.0240],
+  61: [41.8070, -88.0180], 62: [41.5190, -88.0620], 63: [41.8290, -88.1920], 64: [41.4280, -88.2100],
+  65: [41.4270, -88.2090], 66: [41.6040, -87.6380], 67: [41.6080, -87.5440], 68: [41.7230, -87.5870],
+  69: [41.8570, -87.9580], 70: [41.8530, -87.9760], 71: [41.6720, -87.7280], 72: [41.2950, -89.0590],
+  73: [41.2950, -89.0590], 74: [41.6730, -87.7280], 75: [42.0344, -88.0834], 76: [41.6280, -88.2130],
+  77: [41.5560, -87.8750], 78: [41.6710, -87.9900], 79: [41.7590, -88.3250], 80: [41.7420, -88.0420],
+  81: [41.7670, -88.3390], 82: [41.4310, -88.2300], 83: [41.7670, -88.3390], 84: [41.5200, -87.6300],
+  85: [41.6570, -87.8610], 86: [41.5490, -88.0840], 87: [41.5490, -88.0840], 88: [41.5480, -88.0840],
+  89: [41.8830, -87.6380], 90: [41.9, -88.0], 91: [41.3900, -88.1140], 92: [41.6430, -88.0980],
+  93: [41.4500, -88.2480], 94: [41.5460, -88.0760], 95: [41.7200, -87.5700], 96: [41.7170, -87.5600],
+  97: [41.5200, -87.6290], 98: [41.8845, -87.6259], 99: [41.6720, -87.9860], 100: [41.6610, -87.5390],
+  101: [41.6550, -87.6820], 102: [41.3750, -88.4200], 103: [41.4250, -87.9850], 104: [41.8530, -87.9760],
+  105: [41.4270, -88.2260], 106: [40.7920, -89.3580], 107: [41.6410, -88.1000], 108: [41.8570, -87.9590],
+  109: [41.6620, -88.5380], 110: [41.8775, -87.6259], 111: [41.3750, -88.4220], 112: [41.6690, -87.5810],
+  113: [41.7530, -88.1550], 114: [41.6020, -87.0530], 115: [41.5290, -87.6300], 116: [41.5490, -88.0810],
+  117: [41.1237, -88.8260], 118: [41.5640, -87.5380], 119: [41.6740, -87.7310], 120: [41.4320, -88.2310],
+  121: [41.3780, -88.4280], 122: [41.6730, -87.7320], 123: [41.5230, -87.6340], 124: [41.7740, -87.6860],
+  125: [41.6950, -88.0710], 126: [41.4300, -88.2250], 127: [41.6760, -87.9840], 128: [41.3750, -88.4160],
+  129: [41.3, -88.8], 130: [41.5530, -87.8660], 131: [41.5560, -87.8750], 132: [41.5530, -87.8670],
+  133: [42.2520, -87.8350], 134: [42.2520, -87.8350], 135: [41.6990, -88.0700], 136: [41.7410, -87.8460],
+  137: [41.8010, -88.0840], 138: [41.5480, -88.0670], 139: [41.5230, -87.6340], 140: [41.6810, -87.9650],
+  141: [41.5250, -88.0890], 142: [41.3380, -89.0000], 143: [41.6710, -87.7300], 144: [41.6700, -87.7240],
+  145: [42.0340, -88.0840], 146: [41.6290, -88.2130], 147: [41.85, -87.65], 148: [41.6620, -87.5370],
+  149: [41.5520, -87.8650], 150: [41.3760, -88.4150], 151: [41.3360, -89.1290], 152: [41.5590, -87.8660],
+  153: [41.5540, -88.1010], 154: [42.0290, -87.8010], 155: [41.9220, -89.0640], 156: [41.6080, -87.5470],
+  157: [41.8520, -87.9780], 158: [41.7110, -87.8710], 159: [41.3640, -88.8340], 160: [41.6770, -87.9890],
+  161: [41.6600, -87.5360], 162: [41.7290, -87.5580], 163: [41.3530, -88.8510], 164: [41.7000, -88.1020],
+  165: [41.8855, -87.6240], 166: [41.3920, -88.1070], 167: [41.5060, -88.0540], 168: [41.8530, -87.8930],
+  169: [41.8060, -88.0170], 170: [41.8955, -87.6430], 171: [41.6290, -88.2150], 172: [41.7550, -88.1500],
+  173: [41.5890, -88.0470], 174: [41.9370, -87.6590], 175: [41.8050, -88.0180], 176: [41.7740, -87.7830],
+  177: [41.6250, -88.2010], 178: [41.7110, -87.8720], 179: [41.8690, -88.0160], 180: [41.5220, -87.6340],
+  181: [41.3900, -88.1050], 182: [41.6500, -87.4520], 183: [41.6230, -88.2010], 184: [41.8700, -88.0080],
+  185: [41.9400, -87.9870], 186: [41.4510, -88.2550], 187: [41.7680, -87.6830], 188: [41.8080, -87.7220],
+  189: [41.8020, -87.7160], 190: [41.8060, -88.0160], 191: [41.5230, -87.6320],
+};
+
+// ============================================================
+// STATE
+// ============================================================
+let map, markers = {}, clusterGroup;
+let streetLayer, satLayer, isSatellite = false;
+let accounts = JSON.parse(JSON.stringify(RAW_ACCOUNTS)); // working copy
+let userData = {}; // notes + labels per id
+let activeTypes = new Set(['A','B','C','E','F','H','S','X','none']);
+let activeLabels = new Set();
+let searchQ = '';
+let selectedId = null;
+
+function loadUserData() {
+  try { userData = JSON.parse(localStorage.getItem('mw2il_userdata') || '{}'); } catch(e) { userData = {}; }
+}
+function saveUserData() {
+  localStorage.setItem('mw2il_userdata', JSON.stringify(userData));
+}
+
+// ============================================================
+// MAP INIT
+// ============================================================
+function initMap() {
+  map = L.map('map-el', { center: [41.65, -88.1], zoom: 9, zoomControl: true });
+  streetLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap © CARTO', subdomains: 'abcd', maxZoom: 19
+  });
+  satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Tiles © Esri', maxZoom: 19
+  });
+  streetLayer.addTo(map);
+  clusterGroup = L.markerClusterGroup({ maxClusterRadius: 40, showCoverageOnHover: false });
+  map.addLayer(clusterGroup);
+  buildMarkers();
+  map.on('click', () => closeDetail());
+}
+
+const TYPE_COLORS = {
+  A: '#6dff6d', B: '#47c4ff', C: '#d47eff', E: '#ffb347',
+  F: '#47e8ff', H: '#ff6b47', S: '#aaaaaa', X: '#e8ff47', none: '#666'
+};
+
+function makeIcon(type) {
+  const c = TYPE_COLORS[type] || '#666';
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='22' height='28' viewBox='0 0 22 28'>
+    <circle cx='11' cy='11' r='9' fill='${c}' stroke='#000' stroke-width='2' opacity='0.95'/>
+    <line x1='11' y1='20' x2='11' y2='27' stroke='${c}' stroke-width='2' opacity='0.8'/>
+  </svg>`;
+  return L.divIcon({ html: svg, className: '', iconSize: [22, 28], iconAnchor: [11, 27], popupAnchor: [0, -28] });
+}
+
+function buildMarkers() {
+  clusterGroup.clearLayers();
+  markers = {};
+  accounts.forEach(a => {
+    const coords = GEOCOORDS[a.id];
+    if (!coords) return;
+    const m = L.marker(coords, { icon: makeIcon(a.type) });
+    m.on('click', (e) => { L.DomEvent.stop(e); selectAccount(a.id); });
+    m.bindTooltip(a.name, {
+      permanent: false, direction: 'top', offset: [0, -28],
+      className: 'map-tooltip'
+    });
+    markers[a.id] = m;
+  });
+  renderVisibleMarkers();
+}
+
+function renderVisibleMarkers() {
+  clusterGroup.clearLayers();
+  const visible = getFilteredAccounts();
+  const visIds = new Set(visible.map(a => a.id));
+  Object.keys(markers).forEach(id => {
+    if (visIds.has(parseInt(id))) clusterGroup.addLayer(markers[id]);
+  });
+}
+
+// ============================================================
+// FILTERING
+// ============================================================
+function getFilteredAccounts() {
+  return accounts.filter(a => {
+    const typeMatch = activeTypes.has(a.type);
+    const labelMatch = activeLabels.size === 0 || (userData[a.id]?.labels || []).some(l => activeLabels.has(l));
+    const q = searchQ.toLowerCase();
+    const searchMatch = !q || a.name.toLowerCase().includes(q) || (a.city||'').toLowerCase().includes(q);
+    return typeMatch && labelMatch && searchMatch;
+  });
+}
+
+function filterAccounts() {
+  searchQ = document.getElementById('search').value;
+  renderVisibleMarkers();
+  renderList();
+  updateClearBtn();
+  updateDropdown();
+}
+
+let dropdownVisible = false;
+let ddFocusIdx = -1;
+
+function showDropdown() {
+  dropdownVisible = true;
+  updateDropdown();
+}
+
+function hideDropdown() {
+  // Delay so click on item registers first
+  setTimeout(() => {
+    dropdownVisible = false;
+    document.getElementById('search-dropdown').classList.remove('visible');
+    ddFocusIdx = -1;
+  }, 180);
+}
+
+function updateDropdown() {
+  const dd = document.getElementById('search-dropdown');
+  const q = document.getElementById('search').value.trim();
+  if (!dropdownVisible || q.length < 1) { dd.classList.remove('visible'); return; }
+
+  const matches = accounts.filter(a => {
+    const ql = q.toLowerCase();
+    return a.name.toLowerCase().includes(ql) || (a.city||'').toLowerCase().includes(ql);
+  }).slice(0, 12);
+
+  if (matches.length === 0) {
+    dd.innerHTML = `<div class="sd-empty">No accounts found for "${q}"</div>`;
+  } else {
+    dd.innerHTML = matches.map((a, i) => {
+      const color = TYPE_COLORS[a.type] || '#666';
+      const ql = q.toLowerCase();
+      const highlighted = a.name.replace(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi'), '<mark>$1</mark>');
+      return `<div class="sd-item" data-id="${a.id}" onmousedown="dropdownSelect(${a.id})">
+        <div class="sd-dot" style="background:${color}"></div>
+        <div class="sd-info">
+          <div class="sd-name">${highlighted}</div>
+          <div class="sd-city">${a.city ? a.city + ', ' + a.state : a.state || '—'}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  dd.classList.add('visible');
+  ddFocusIdx = -1;
+}
+
+function dropdownSelect(id) {
+  selectAccount(id);
+  const a = accounts.find(x => x.id === id);
+  if (a) document.getElementById('search').value = a.name;
+  document.getElementById('search-dropdown').classList.remove('visible');
+  dropdownVisible = false;
+}
+
+// Keyboard navigation in dropdown
+document.addEventListener('keydown', function(e) {
+  const dd = document.getElementById('search-dropdown');
+  if (!dd.classList.contains('visible')) return;
+  const items = dd.querySelectorAll('.sd-item');
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    ddFocusIdx = Math.min(ddFocusIdx + 1, items.length - 1);
+    items.forEach((el, i) => el.classList.toggle('sd-focused', i === ddFocusIdx));
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    ddFocusIdx = Math.max(ddFocusIdx - 1, 0);
+    items.forEach((el, i) => el.classList.toggle('sd-focused', i === ddFocusIdx));
+  } else if (e.key === 'Enter' && ddFocusIdx >= 0) {
+    e.preventDefault();
+    const focused = items[ddFocusIdx];
+    if (focused) dropdownSelect(parseInt(focused.dataset.id));
+  } else if (e.key === 'Escape') {
+    dd.classList.remove('visible');
+    dropdownVisible = false;
+  }
+});
+
+function toggleTypeFilter(type, el) {
+  if (type === 'all') {
+    if (activeTypes.size === 9) {
+      activeTypes.clear();
+      document.querySelectorAll('.filter-chip:not([data-type="all"])').forEach(c => c.classList.remove('active'));
+      el.classList.add('active');
+    } else {
+      activeTypes = new Set(['A','B','C','E','F','H','S','X','none']);
+      document.querySelectorAll('.filter-chip:not([data-type="all"])').forEach(c => c.classList.add('active'));
+      el.classList.add('active');
+    }
+  } else {
+    if (activeTypes.has(type)) activeTypes.delete(type);
+    else activeTypes.add(type);
+    el.classList.toggle('active');
+    const allBtn = document.querySelector('.filter-chip[data-type="all"]');
+    allBtn.classList.toggle('active', activeTypes.size === 9);
+  }
+  filterAccounts();
+}
+
+function clearAllFilters() {
+  searchQ = ''; document.getElementById('search').value = '';
+  activeTypes = new Set(['A','B','C','E','F','H','S','X','none']);
+  activeLabels.clear();
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.add('active'));
+  document.querySelectorAll('.label-chip').forEach(c => c.classList.remove('active'));
+  filterAccounts();
+  updateClearBtn();
+}
+
+function updateClearBtn() {
+  const hasFilter = searchQ || activeTypes.size < 9 || activeLabels.size > 0;
+  document.getElementById('clear-filters-btn').style.display = hasFilter ? 'block' : 'none';
+}
+
+// ============================================================
+// RENDER LIST
+// ============================================================
+function renderList() {
+  const filtered = getFilteredAccounts();
+  const list = document.getElementById('account-list');
+  document.getElementById('count-bar').textContent = `Showing ${filtered.length} of ${accounts.length} accounts`;
+  list.innerHTML = '';
+  filtered.forEach(a => {
+    const ud = userData[a.id] || {};
+    const labels = ud.labels || [];
+    const note = ud.note || '';
+    const typeColor = TYPE_COLORS[a.type] || '#666';
+    const div = document.createElement('div');
+    div.className = 'acct-item' + (selectedId === a.id ? ' selected' : '');
+    div.onclick = () => selectAccount(a.id);
+    div.innerHTML = `
+      <div class="acct-name">${a.name}</div>
+      <div class="acct-city">${a.city ? a.city + ', ' + a.state : a.state || ''}</div>
+      <div class="acct-badges">
+        ${a.type !== 'none' ? `<span class="type-badge" style="background:${typeColor}22;color:${typeColor};border:1px solid ${typeColor}44">${a.type} — ${a.typeLabel}</span>` : ''}
+        ${labels.map(l => `<span class="label-badge">${l}</span>`).join('')}
+      </div>
+      ${note ? '<div class="note-dot"></div>' : ''}
+    `;
+    list.appendChild(div);
+  });
+}
+
+// ============================================================
+// SELECT ACCOUNT
+// ============================================================
+function selectAccount(id) {
+  selectedId = id;
+  const a = accounts.find(x => x.id === id);
+  if (!a) return;
+  const ud = userData[id] || {};
+  const labels = ud.labels || [];
+
+  // Pan map
+  const coords = GEOCOORDS[id];
+  if (coords) {
+    map.setView(coords, Math.max(map.getZoom(), 13), { animate: true });
+    if (markers[id]) markers[id].openPopup ? null : null;
+  }
+
+  // Populate detail panel
+  const typeColor = TYPE_COLORS[a.type] || '#666';
+  document.getElementById('dp-name').textContent = a.name;
+  document.getElementById('dp-addr').textContent = [a.address, a.city, a.state, a.zip].filter(Boolean).join(', ');
+  document.getElementById('dp-meta').innerHTML = `
+    ${a.type !== 'none' ? `<span class="type-badge" style="background:${typeColor}22;color:${typeColor};border:1px solid ${typeColor}44;padding:3px 10px;border-radius:10px;font-family:'DM Mono',monospace;font-size:10px">${a.type} — ${a.typeLabel}</span>` : ''}
+    ${a.phone ? `<span id="dp-phone">${a.phone}</span>` : ''}
+  `;
+  document.getElementById('dp-actions').innerHTML = `
+    <button class="dp-btn sat-btn" onclick="openSatView(${id})">🛰 Satellite View</button>
+    <button class="dp-btn" onclick="openGoogleMaps(${id})">📍 Google Maps</button>
+    ${a.phone ? `<button class="dp-btn" onclick="window.location='tel:${a.phone}'">📞 Call</button>` : ''}
+  `;
+  document.getElementById('dp-note').value = ud.note || '';
+  renderDetailLabels(id);
+  document.getElementById('new-label-input').value = '';
+
+  const panel = document.getElementById('detail-panel');
+  panel.classList.add('open');
+
+  // Highlight in list
+  document.querySelectorAll('.acct-item').forEach(el => el.classList.remove('selected'));
+  renderList();
+
+  // Mobile: close sidebar
+  if (window.innerWidth <= 700) closeSidebar();
+}
+
+function renderDetailLabels(id) {
+  const ud = userData[id] || {};
+  const labels = ud.labels || [];
+  document.getElementById('dp-labels').innerHTML = labels.map(l =>
+    `<span class="dp-label-tag" title="Click to remove" onclick="removeLabel(${id},'${l.replace(/'/g,"\\'")}')">⬡ ${l} ×</span>`
+  ).join('');
+}
+
+function addLabel() {
+  const input = document.getElementById('new-label-input');
+  const val = input.value.trim();
+  if (!val || !selectedId) return;
+  if (!userData[selectedId]) userData[selectedId] = {};
+  if (!userData[selectedId].labels) userData[selectedId].labels = [];
+  if (!userData[selectedId].labels.includes(val)) {
+    userData[selectedId].labels.push(val);
+    saveUserData();
+    renderDetailLabels(selectedId);
+    renderList();
+    refreshLabelFilters();
+    showToast('Label added');
+  }
+  input.value = '';
+}
+
+function removeLabel(id, label) {
+  if (!userData[id]?.labels) return;
+  userData[id].labels = userData[id].labels.filter(l => l !== label);
+  saveUserData();
+  renderDetailLabels(id);
+  renderList();
+  refreshLabelFilters();
+}
+
+function saveNote() {
+  if (!selectedId) return;
+  if (!userData[selectedId]) userData[selectedId] = {};
+  userData[selectedId].note = document.getElementById('dp-note').value;
+  saveUserData();
+  renderList();
+  const btn = document.getElementById('dp-save-note');
+  btn.textContent = '✓ Saved';
+  btn.classList.add('save-flash');
+  setTimeout(() => { btn.textContent = 'Save Note'; btn.classList.remove('save-flash'); }, 1200);
+}
+
+function closeDetail() {
+  document.getElementById('detail-panel').classList.remove('open');
+  selectedId = null;
+  renderList();
+}
+
+// ============================================================
+// SATELLITE
+// ============================================================
+function openSatView(id) {
+  const a = accounts.find(x => x.id === id);
+  if (!a) return;
+  const coords = GEOCOORDS[id];
+  let q = '';
+  if (coords) q = `${coords[0]},${coords[1]}`;
+  else q = encodeURIComponent([a.address, a.city, a.state].filter(Boolean).join(', '));
+  const url = `https://www.google.com/maps/embed/v1/place?key=AIzaSyD-placeholder&q=${q}&maptype=satellite&zoom=17`;
+  // Use direct Google Maps URL instead (no API key needed for iframe embed alternative)
+  const gmUrl = `https://maps.google.com/maps?q=${coords ? coords[0]+','+coords[1] : encodeURIComponent(a.name)}&t=k&z=17&output=embed`;
+  document.getElementById('sat-modal-title').textContent = a.name;
+  document.getElementById('sat-iframe').src = gmUrl;
+  document.getElementById('sat-modal').classList.add('open');
+}
+
+function openGoogleMaps(id) {
+  const a = accounts.find(x => x.id === id);
+  const coords = GEOCOORDS[id];
+  let url;
+  if (coords) url = `https://www.google.com/maps/search/?api=1&query=${coords[0]},${coords[1]}`;
+  else url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(a.name + ' ' + a.city + ' ' + a.state)}`;
+  window.open(url, '_blank');
+}
+
+function closeSatModal() {
+  document.getElementById('sat-modal').classList.remove('open');
+  document.getElementById('sat-iframe').src = '';
+}
+
+function toggleSatelliteBase() {
+  isSatellite = !isSatellite;
+  if (isSatellite) {
+    map.removeLayer(streetLayer); satLayer.addTo(map);
+  } else {
+    map.removeLayer(satLayer); streetLayer.addTo(map);
+  }
+  document.getElementById('satellite-toggle').classList.toggle('active', isSatellite);
+  document.getElementById('sat-base-btn').classList.toggle('active', isSatellite);
+}
+
+// ============================================================
+// LABELS FILTER UI
+// ============================================================
+function refreshLabelFilters() {
+  const allLabels = new Set();
+  Object.values(userData).forEach(u => (u.labels||[]).forEach(l => allLabels.add(l)));
+  const row = document.getElementById('label-filter-row');
+  if (allLabels.size === 0) { row.style.display = 'none'; return; }
+  row.style.display = 'flex';
+  row.innerHTML = Array.from(allLabels).map(l =>
+    `<span class="label-chip ${activeLabels.has(l)?'active':''}" onclick="toggleLabelFilter('${l.replace(/'/g,"\\'")}',this)"># ${l}</span>`
+  ).join('');
+}
+
+function toggleLabelFilter(label, el) {
+  if (activeLabels.has(label)) activeLabels.delete(label);
+  else activeLabels.add(label);
+  el.classList.toggle('active');
+  filterAccounts();
+  updateClearBtn();
+}
+
+// ============================================================
+// MOBILE
+// ============================================================
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebar-overlay').classList.toggle('open');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+}
+
+// ============================================================
+// TOAST
+// ============================================================
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+window.addEventListener('load', () => {
+  loadUserData();
+  initMap();
+  renderList();
+  refreshLabelFilters();
+});
+</script>
+</body>
+</html>
